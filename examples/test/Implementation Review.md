@@ -117,3 +117,130 @@ When using a graph database like **FalkorDB**, which is based on Redis (an in-me
 Graph data integrity is a concern when using FalkorDB or any other non-ACID-compliant database. The core issues revolve around ensuring **consistent**, **atomic** operations and preventing **partial writes** in case of failure. The strategies discussed—such as implementing your own transactional logic, using batch operations, and handling eventual consistency—can help address these concerns and ensure data reliability.
 
 For a more detailed approach, consider integrating your graph database with additional components like **distributed transactions** or **logging frameworks** for better fault tolerance and system robustness.
+
+Here’s an updated summary of your architectures, with detailed explanations and the requested block-based visual format.
+
+---
+
+### **Updated Architecture Overview**
+
+The system will always use **InfluxDB** for time-series data, and **GraphQL** will serve as the API layer for both front-end access and internal data consumption (possibly also for integration with an AI service). The two architectures you are considering focus on how to manage **event-driven data** and **enterprise data**.
+
+---
+
+### **Option 1: FalkorDB for Both Event-Driven and Enterprise Data**
+
+#### **Architecture Block Flow**:
+```
++---------------------+    +--------------------+    +---------------------+    +------------------------+
+|  InfluxDB (Time-Series) | > |   GraphQL API      | > |  FalkorDB (Event-Driven Data) | > |  Front-End (NextJS)     |
++---------------------+    +--------------------+    +---------------------+    +------------------------+
+                                                               |
+                                                        +---------------------+
+                                                        |  FalkorDB (Enterprise Data) |
+                                                        +---------------------+
+```
+
+#### **Components Breakdown**:
+1. **InfluxDB (Time-Series Data)**:
+   - **Purpose**: Manage time-series data such as sensor readings, production metrics, and cycle times.
+   - **Features**: Highly optimized for fast queries on time-stamped data.
+
+2. **GraphQL API**:
+   - **Purpose**: Serve as the middleware for both internal services and front-end components to query data.
+   - **Integration**: Exposes a unified GraphQL API to fetch data from InfluxDB and FalkorDB (for event-driven and enterprise data).
+
+3. **FalkorDB (Event-Driven Data)**:
+   - **Purpose**: Manage event-driven data such as production quantities, reject counts, and other real-time operational metrics.
+   - **Features**: A graph-oriented database well-suited for handling event-driven workflows and relationships.
+
+4. **FalkorDB (Enterprise Data)**:
+   - **Purpose**: Store enterprise-level data like users, authentication data, enterprise configurations, and settings.
+   - **Features**: FalkorDB as a Graph ORM also provides a natural fit for AI/ML integration, handling complex relationships.
+
+5. **Front-End (NextJS)**:
+   - **Purpose**: Display data to users in an interactive web UI.
+   - **Integration**: Consumes data from the GraphQL API to present insights and operational metrics in dashboards.
+
+#### **Pros**:
+- **Simplified Service Architecture**: Reduces the number of different data systems and services to manage, making it simpler to integrate.
+- **Single Database System**: FalkorDB can handle both event-driven and enterprise data, ensuring smoother interaction between different types of data.
+- **AI & ML Compatibility**: FalkorDB’s graph model is naturally suited for AI and machine learning workloads, allowing for efficient querying and pattern recognition in relationships.
+- **Less Overhead**: Fewer databases mean fewer systems to maintain, monitor, and scale.
+
+#### **Cons**:
+- **Non-ACID Compliance**: FalkorDB is not ACID-compliant by default. This requires the development of a custom transactional layer to ensure data integrity across different operations.
+- **Complexity in Data Management**: While the service count is reduced, managing both event-driven and enterprise data in a single non-ACID-compliant database may lead to data consistency challenges, especially for transactional or critical data.
+- **Learning Curve**: FalkorDB is less common in the industry compared to established relational databases, meaning there may be a steeper learning curve and less community support for troubleshooting.
+- **Performance Limitations**: While FalkorDB is optimized for graphs, it may not be the best performer for all use cases (e.g., handling high-write throughput for time-series data).
+
+---
+
+### **Option 2: PostgreSQL for Enterprise Data + FalkorDB for Event-Driven Data and Data Coalescing**
+
+#### **Architecture Block Flow**:
+```
++---------------------+    +--------------------+    +---------------------+    +------------------------+
+|  InfluxDB (Time-Series) | > |   GraphQL API      | > |  PostgreSQL (Enterprise Data) | > |  Front-End (NextJS)     |
++---------------------+    +--------------------+    +---------------------+    +------------------------+
+                                                               |
+                                                        +---------------------+
+                                                        | FalkorDB (Event-Driven Data) |
+                                                        +---------------------+
+                                                               |
+                                                        +---------------------+
+                                                        |  FalkorDB (Graph Data Coalescing) |
+                                                        +---------------------+
+```
+
+#### **Components Breakdown**:
+1. **InfluxDB (Time-Series Data)**:
+   - **Purpose**: Stores time-series data like sensor readings, cycle times, etc.
+   - **Features**: Optimized for high-frequency data ingestion and efficient time-series queries.
+
+2. **GraphQL API**:
+   - **Purpose**: Acts as the data access layer, exposing aggregated data from both InfluxDB and PostgreSQL (via ETL service) to the front-end.
+   - **Integration**: The API consolidates data from different sources into a unified format for the front-end and other services.
+
+3. **PostgreSQL (Enterprise Data)**:
+   - **Purpose**: Manages transactional and relational enterprise data such as users, roles, configurations, and authentication data.
+   - **Features**: Robust ACID compliance ensures data integrity and strong consistency for critical enterprise functions.
+
+4. **FalkorDB (Event-Driven Data)**:
+   - **Purpose**: Stores event-driven data like production quantities, reject counts, and job responses from machines.
+   - **Integration**: Event-driven data is processed and stored in FalkorDB after being aggregated from time-series data (via an ETL service).
+
+5. **FalkorDB (Data Coalescing for AI/ML)**:
+   - **Purpose**: Coalesces time-series, event-driven, and enterprise data into a unified graph model for AI/ML processing.
+   - **Features**: The graph structure allows for complex relationship-based queries, making it ideal for feeding into AI-driven insights and analytics.
+
+6. **Front-End (NextJS)**:
+   - **Purpose**: Presents data from the GraphQL API in a user-friendly interface, using dashboards, charts, and visualizations.
+
+#### **Pros**:
+- **ACID-Compliant Enterprise Data**: PostgreSQL provides robust ACID compliance, ensuring strong transactional integrity for critical data such as users, settings, and enterprise configurations.
+- **Scalable Data Models**: By separating event-driven data (FalkorDB) from enterprise data (PostgreSQL), this architecture ensures that each type of data is stored and queried efficiently according to its needs.
+- **Flexible and Reliable**: PostgreSQL’s ACID compliance reduces the risk of data inconsistencies that can arise in a non-ACID environment (compared to Option 1).
+- **AI-Ready**: FalkorDB’s graph model is ideal for AI/ML workloads, enabling complex relationships to be processed for advanced analytics and intelligence.
+
+#### **Cons**:
+- **Increased Complexity**: Managing both PostgreSQL and FalkorDB introduces more complexity. You will need to maintain two separate systems and ensure efficient ETL processes between them.
+- **Additional Overhead for Data Processing**: The need for an ETL service to aggregate time-series and event-driven data into FalkorDB for graph-based querying adds extra complexity and overhead.
+- **Performance Considerations**: Querying across multiple databases (PostgreSQL, InfluxDB, and FalkorDB) could introduce latency if not well-optimized. Efficient integration and synchronization between these systems are key.
+- **Potential for Data Duplication**: Depending on how you aggregate and store data, there might be some redundancy between databases, especially if data is replicated across the Graph and relational models.
+
+---
+
+### **Conclusion and Recommendations**
+
+#### **Option 1: FalkorDB for Event-Driven and Enterprise Data**  
+- **Best For**: Scenarios where you want to minimize the number of services and databases while taking advantage of FalkorDB’s graph capabilities. It’s ideal for applications that heavily rely on graph-based AI/ML features and can handle the complexities of creating an ACID layer for FalkorDB.
+- **Considerations**: You must be cautious about the lack of native ACID compliance in FalkorDB, which requires an additional layer of complexity to ensure transactional consistency.
+
+#### **Option 2: PostgreSQL for Enterprise Data + FalkorDB for Event-Driven Data**  
+- **Best For**: Use cases where the integrity and reliability of enterprise data (users, settings, etc.) are paramount, and where a more scalable, dedicated system (FalkorDB) is needed for event-driven and graph-based data aggregation.
+- **Considerations**: This option introduces more services and data processing overhead but provides the reliability of ACID compliance from PostgreSQL while still leveraging FalkorDB for graph capabilities and AI.
+
+#### **Final Thoughts**:
+- **Option 1** is a good choice if your application leans heavily on AI/ML and graph-based relationships, and you can manage the complexity of building a custom ACID layer.
+- **Option 2** offers a more robust, industry-standard solution for enterprise data and will be easier to scale in terms of long-term maintenance, but it requires more services and additional ETL processes for data aggregation.
